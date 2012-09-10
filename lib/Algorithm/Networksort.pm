@@ -117,6 +117,7 @@ my %algname = (
 	bosenelson => "Bose-Nelson",
 	batcher => "Batcher's Mergesort",
 	hibbard => "Hibbard",
+	bitonic => "Bitonic",
 	best => "Best Known",
 );
 
@@ -219,6 +220,7 @@ sub nw_comparators
 	@comparators = bosenelson($inputs) if ($opts{algorithm} eq 'bosenelson');
 	@comparators = hibbard($inputs) if ($opts{algorithm} eq 'hibbard');
 	@comparators = batcher($inputs) if ($opts{algorithm} eq 'batcher');
+	@comparators = bitonic($inputs) if ($opts{algorithm} eq 'bitonic');
 
 	#
 	# Instead of using the list as provided by the algorithms,
@@ -505,6 +507,65 @@ sub batcher
 	return @network;
 }
 
+
+
+#
+# @network = bitonic($inputs);
+#
+# Batcher's Bitonic sort as described and implemented here:
+# http://www.iti.fh-flensburg.de/lang/algorithmen/sortieren/bitonic/oddn.htm
+#
+sub bitonic($)
+{
+        my $inputs = shift;
+        my @network;
+
+        return () if ($inputs < 2);
+
+        my ($ASCENDING, $DESCENDING) = (1, 0);
+
+        my ($sort, $merge, $greatest_power_of_2_less_than);
+
+        $sort = sub {
+                my ($lo, $n, $dir) = @_;
+
+                if ($n > 1) {
+                        my $m = int($n/2);
+                        $sort->($lo, $m, !$dir);
+                        $sort->($lo + $m, $n - $m, $dir);
+                        $merge->($lo, $n, $dir);
+                }
+        };
+
+        $merge = sub {
+                my ($lo, $n, $dir) = @_;
+
+                if ($n > 1) {
+                        my $m = $greatest_power_of_2_less_than->($n);
+                        for (my $i=$lo; $i < $lo+$n-$m; $i++) {
+                                push @network, [ $i, $i+$m, { direction => $dir } ];
+                        }
+                        $merge->($lo, $m, $dir);
+                        $merge->($lo + $m, $n - $m, $dir);
+                }
+        };
+
+        $greatest_power_of_2_less_than = sub {
+                my $n = shift;
+                my $k = 1;
+                while ($k < $n) {
+                        $k <<= 1
+                }
+                return $k >> 1;
+        };
+
+        $sort->(0, $inputs, $ASCENDING);
+
+        return @network;
+}
+
+
+
 #
 # $array_ref = nw_sort(\@network, \@array);
 #
@@ -526,9 +587,14 @@ sub nw_sort
 	#
 	foreach my $comparator (@$network)
 	{
-		my($left, $right) = @$comparator;
+		my($left, $right, $extra) = @$comparator;
 
-		if (($$array[$left] <=> $$array[$right]) == 1)
+		my $swap_condition = 1;
+		if ($extra && exists $extra->{direction}) {
+			$swap_condition = $extra->{direction} ? 1 : -1;
+		}
+
+		if (($$array[$left] <=> $$array[$right]) == $swap_condition)
 		{
 			@$array[$left, $right] = @$array[$right, $left];
 		}
@@ -915,15 +981,19 @@ sub nw_svg_graph
 	#
 	$string .= qq(    <!-- Define the comparator lines, which vary in length. -->\n);
 
-	my @cmptr = (0) x $inputs;
+	my $cmptr = {};
 	for my $comparator (@$network)
 	{
-		my($from, $to) = @$comparator;
+		my($from, $to, $extra) = @$comparator;
+		my $direction;
+		$direction = $extra->{direction} if exists $extra->{direction};
+
 		my $clen = $to - $from;
-		if ($cmptr[$clen] == 0)
+		if ((defined $direction && !exists $cmptr->{$clen}->{$direction}) || !exists $cmptr->{$clen})
 		{
 			my $endpoint = $vcoord[$to] - $vcoord[$from];
-			$cmptr[$clen] = 1;
+			$cmptr->{$clen} = {};
+			$cmptr->{$clen}->{direction} = $extra->{direction} if defined $direction;
 
 			#
 			# Color the components in the group individually.
@@ -932,13 +1002,27 @@ sub nw_svg_graph
 			$l_clr = "fill:$clrset{compline}; stroke:$clrset{compline}";
 			$e_clr = "fill:$clrset{compend}; stroke:$clrset{compend}";
 
+			my $id_suffix = '';
+			$id_suffix = '_' . ($direction ? 'up' : 'down');
+
 			$string .=
-			qq(    <${ns}g id="comparator$clen" style="stroke-width:$grset{stroke_width}" >\n) .
-			qq(      <${ns}desc>Comparator size $clen.</${ns}desc>\n) .
-			qq(      <${ns}circle style="$b_clr" cx="0" cy="0" r="$grset{stroke_width}" />\n) .
-			qq(      <${ns}line style="$l_clr" x1="0" y1="0" x2="0" y2="$endpoint" />\n) .
-			qq(      <${ns}circle style="$e_clr" cx="0" cy="$endpoint" r="$grset{stroke_width}" />\n) .
-			qq(    </${ns}g>\n);
+			qq(    <${ns}g id="comparator$clen$id_suffix" style="stroke-width:$grset{stroke_width}" >\n) .
+			qq(      <${ns}desc>Comparator size $clen.</${ns}desc>\n);
+
+			if (defined $direction) {
+				my $y1 = $extra->{direction} ? $endpoint-1 : 1;
+				my $y2 = $extra->{direction} ? $endpoint-5 : 5;
+				$string .=
+				qq(      <${ns}line style="$e_clr" x1="0" y1="$y1" x2="3" y2="$y2" />\n) .
+				qq(      <${ns}line style="$e_clr" x1="0" y1="$y1" x2="-3" y2="$y2" />\n) .
+				qq(      <${ns}line style="$l_clr" x1="0" y1="0" x2="0" y2="$endpoint" />\n);
+			} else {
+				$string .=
+				qq(      <${ns}circle style="$b_clr" cx="0" cy="0" r="$grset{stroke_width}" />\n) .
+				qq(      <${ns}line style="$l_clr" x1="0" y1="0" x2="0" y2="$endpoint" />\n) .
+				qq(      <${ns}circle style="$e_clr" cx="0" cy="$endpoint" r="$grset{stroke_width}" />\n);
+			}
+			$string .= qq(    </${ns}g>\n);
 		}
 	}
 
@@ -960,10 +1044,16 @@ sub nw_svg_graph
 	{
 		for my $comparator (@$group)
 		{
-			my($from, $to) = @$comparator;
+			my($from, $to, $extra) = @$comparator;
+			my $direction;
+        	        $direction = $extra->{direction} if exists $extra->{direction};
+
 			my $clen = $to - $from;
 
-			$string .= qq(  <!-- [$from, $to] --> <${ns}use xlink:href="#comparator$clen" x = ") .
+			my $id_suffix = '';
+			$id_suffix = '_' . ($direction ? 'up' : 'down');
+
+			$string .= qq(  <!-- [$from, $to] --> <${ns}use xlink:href="#comparator$clen$id_suffix" x = ") .
 					$hcoord[$hidx] . qq(" y = ") . $vcoord[$from] . qq(" />\n);
 		}
 		$hidx++;
