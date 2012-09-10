@@ -128,6 +128,7 @@ my %graphset = (
 	stroke_width => 2,
 	title => undef,
 	namespace => undef,
+	inputline_color_override => {},
 );
 
 #
@@ -842,19 +843,32 @@ sub nw_svg_graph($$%)
 	#
 	my $refdim = $grset{stroke_width};
 	my $boxdim = 2 * $refdim;
-	my $b_clr = "stroke:$clrset{inputbegin}";
-	my $l_clr = "stroke:$clrset{inputline}";
-	my $e_clr = "stroke:$clrset{inputend}";
+	my $b_clr = $clrset{inputbegin};
+	my $l_clr = $clrset{inputline};
+	my $e_clr = $clrset{inputend};
 
-	$string .= qq(    <${ns}g id="inputline" style="fill:none; stroke-width:$grset{stroke_width}" >\n);
-	$string .= qq(      <${ns}desc>Input line.</${ns}desc>\n);
-	$string .= qq(      <${ns}circle style="$b_clr" cx="$grset{hz_margin}" cy="0" r="$grset{stroke_width}" />\n);
-	$string .= qq(      <${ns}line style="$l_clr" x1="$grset{hz_margin}" y1="0" x2=") .
-				($hcoord[$columns - 1] + $grset{indent}) . qq(" y2="0" />\n);
-	$string .= qq(      <${ns}circle style="$e_clr" cx=") . ($hcoord[$columns - 1] + $grset{indent}) .
-				qq(" cy="0" r="$grset{stroke_width}" />\n);
+        my $render_input_line = sub {
+		my ($index, $b_clr, $l_clr, $e_clr) = @_;
+		$string .= qq(    <${ns}g id="inputline$index" style="fill:none; stroke-width:$grset{stroke_width}" >\n);
+		$string .= qq(      <${ns}desc>Input line.</${ns}desc>\n);
+		$string .= qq(      <${ns}circle style="stroke:$b_clr" cx="$grset{hz_margin}" cy="0" r="$grset{stroke_width}" />\n);
+		$string .= qq(      <${ns}line style="stroke:$l_clr" x1="$grset{hz_margin}" y1="0" x2=") .
+					($hcoord[$columns - 1] + $grset{indent}) . qq(" y2="0" />\n);
+		$string .= qq(      <${ns}circle style="stroke:$e_clr" cx=") . ($hcoord[$columns - 1] + $grset{indent}) .
+					qq(" cy="0" r="$grset{stroke_width}" />\n);
 
-	$string .= qq(    </${ns}g>\n    <!-- Now the comparator lines, which vary in length. -->\n);
+		$string .= qq(    </${ns}g>\n    <!-- Now the comparator lines, which vary in length. -->\n);
+	};
+
+	$render_input_line->('', $b_clr, $l_clr, $e_clr);
+
+	foreach my $index (keys %{ $grset{inputline_color_override} }) {
+		my $override = $grset{inputline_color_override}->{$index};
+		my $b_clr = $override->{inputbegin} || $b_clr;
+		my $l_clr = $override->{inputline} || $l_clr;
+		my $e_clr = $override->{inputend} || $e_clr;
+		$render_input_line->($index, $b_clr, $l_clr, $e_clr);
+	}
 
 
 	$string .= qq(    <!-- Define the input line template. -->\n);
@@ -908,7 +922,10 @@ sub nw_svg_graph($$%)
 	#
 	$string .= qq(  </${ns}defs>\n\n  <!-- Draw the input lines. -->\n);
 	$string .= qq(  <${ns}g id="inputgroup">\n);
-	$string .= qq(    <${ns}use xlink:href="#inputline" y = "$vcoord[$_]" />\n) for (0..$inputs-1);
+	for my $input (0..$inputs-1) {
+		my $index = exists $grset{inputline_color_override}->{$input} ? $input : '';
+		$string .= qq(    <${ns}use xlink:href="#inputline$index" y = "$vcoord[$input]" />\n);
+	}
 	$string .= qq(  </${ns}g>\n);
 
 	#
