@@ -1,5 +1,7 @@
-# Before `make install' is performed this script should be runnable with
-# `make test'. After `make install' it should work as `perl bitonic04.t'
+# This test checks bitonic networks in bi-directional (up and down
+# arrows) format.
+
+use strict;
 
 use Test::Simple tests => 6;
 

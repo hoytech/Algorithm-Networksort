@@ -27,6 +27,7 @@ use warnings;
 		nw_comparators
 		nw_format
 		nw_sort
+		make_network_unidirectional
 	) ],
 );
 
@@ -1046,7 +1047,7 @@ sub nw_svg_graph
 		{
 			my($from, $to, $extra) = @$comparator;
 			my $direction;
-        	        $direction = $extra->{direction} if exists $extra->{direction};
+			$direction = $extra->{direction} if exists $extra->{direction};
 
 			my $clen = $to - $from;
 
@@ -1182,6 +1183,49 @@ sub semijoin
 
 	return @newlist;
 }
+
+
+
+## This function "re-wires" a bi-directional sorting network
+## (the ones that contain directional arrows) and turns it
+## into a normal, uni-directional network.
+
+sub make_network_unidirectional {
+	my ($network_ref) = @_;
+
+	my @network = @$network_ref;
+
+	foreach my $i (0..$#network) {
+		if (!$network[$i]->[2]->{direction}) {
+			($network[$i]->[0], $network[$i]->[1]) = ($network[$i]->[1], $network[$i]->[0]);
+		}
+		delete $network[$i]->[2]->{direction};
+	}
+
+	foreach my $i (0..$#network) {
+		my $comparator = $network[$i];
+		my ($x, $y, $extra) = @$comparator;
+
+		if ($x > $y) {
+			foreach my $j (($i+1)..$#network) {
+				my $j_comparator = $network[$j];
+				my ($j_x, $j_y, $j_extra) = @$j_comparator;
+
+				$j_comparator->[0] = $y if $x == $j_x;
+				$j_comparator->[1] = $y if $x == $j_y;
+				$j_comparator->[0] = $x if $y == $j_x;
+				$j_comparator->[1] = $x if $y == $j_y;
+			}
+			($comparator->[0], $comparator->[1]) = ($comparator->[1], $comparator->[0]);
+		}
+	}
+
+	return \@network;
+}
+
+
+
+
 
 1;
 __END__
