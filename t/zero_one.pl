@@ -10,8 +10,12 @@ sub zero_one
 	my $network_ref = shift;
 	my $zo = qr/^0+1+$/;
 
-	foreach my $x (1 .. (1 << $inputs) - 2)
+	my $total = (1 << $inputs) - 2;
+	foreach my $x (1 .. $total)
 	{
+		if ($ENV{ZERO_ONE_PROGRESS} && $x % 1000 == 0) {
+			print STDERR "$x/$total\n";
+		}
 		my @bitlist = (split(//, unpack("B32", pack("N", $x))))[32 - $inputs .. 31];
 		my $x_binary = join "", @bitlist;
 
