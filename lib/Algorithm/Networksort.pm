@@ -24,6 +24,7 @@ use warnings;
 		nw_color
 		nw_graph
 		nw_group
+		nw_stages
 		nw_comparators
 		nw_format
 		nw_sort
@@ -676,6 +677,38 @@ sub nw_group
 
 	#push @node_stack, [sort {${$a}[0] <=> ${$b}[0]} splice @nodes, 0] if (@nodes);
 	return @node_stack;
+}
+
+sub nw_stages {
+	my $network_ref = shift;
+	my $inputs = shift;
+
+	my @network = @$network_ref;
+	my @temp_network;
+	my @current_stage;
+	my @stages;
+	my $seen = '';
+
+	do {
+		while(@network) {
+			my $comparator = shift @network;
+			if (!vec($seen, $comparator->[0], 1) && !vec($seen, $comparator->[1], 1)) {
+				push @current_stage, $comparator;
+			} else {
+				push @temp_network, $comparator;
+			}
+			vec($seen, $comparator->[0], 1) = 1;
+			vec($seen, $comparator->[1], 1) = 1;
+		}
+
+		push @stages, [ @current_stage ];
+		@current_stage = ();
+		$seen = '';
+		@network = @temp_network;
+		@temp_network = ();
+	} while (@network);
+
+	return @stages;
 }
 
 #
